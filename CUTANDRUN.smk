@@ -166,9 +166,11 @@ rule namesort_st_pruned:
     input:
         os.path.join(PRUNE_DIR, "{sample}.stpruned.bam")
     output:
-        temp(os.path.join(PRUNE_DIR, "{sample}.ns.bam"))
+        temp(os.path.join(PRUNE_DIR, "{sample}.ns.bam")),
+        os.path.join(CONDA_ENVS_DIR, "{sample}.atac_chip_pipeline.env.txt")
     shell:
-        "samtools sort -n -o {output} {input}"
+        "samtools sort -n -o {output} {input} ;"
+        "conda list --export > {output.condaenv}"
 
 rule X0_pair_filter:
     input:
