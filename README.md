@@ -71,7 +71,7 @@ Finally, deactivate the environment with:
     #Navigate to where you want this pipeline to be located
     cd /nfs/turbo/<lab-turbo>/pipelines
 
-    git clone https://github.com/russell-ryan-lab/ChIPseq_ATACseq_pipelines
+    git clone -b 1.2.0 https://github.com/russell-ryan-lab/ChIPseq_ATACseq_pipelines
 
 ##### Setup Homer
 Peak calling in the ChIP-seq pipeline is done with [Homer](http://homer.ucsd.edu/homer/). Homer requires some additional setup of genome references, outlined below. The resulting Homer references will be installed in the `atac_chip_pipeline` environment. It is a peculiarity of installing Homer with Conda that this step must be done separately. We define the environment variable $HOMER_DIR in the following example to flexibly handle different conda environment locations.

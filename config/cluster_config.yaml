@@ -26,6 +26,8 @@ bwa_samse:
     time: '16:00:00'
 deeptools_bamcoverage_bw:
     time: '07-00:00:00'
+deeptools_bamcoverage_bg:
+    time: '07-00:00:00'
 fastqc:
     name: '{rule}'
     ntask: '8'
