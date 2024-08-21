@@ -58,6 +58,7 @@ SEACR_STRINGENT_HOMERMOTIF_DIR = prefix_results('seacr_stringentpeak_homer_motif
 SEACR_INTERMEDIATE_HOMERMOTIF_DIR = prefix_results('seacr_intermediatepeak_homer_motif')
 SEACR_RELAXED_HOMERMOTIF_DIR = prefix_results('seacr_relaxedpeak_homer_motif')
 SCRIPTS_DIR = os.path.join(workflow.basedir, 'scripts')
+CONDA_ENVS_DIR = prefix_results('conda_envs')
 
 # Set workdir - Snakemake will be run from this location.
 workdir:
@@ -124,7 +125,8 @@ rule mark_duplicates:
         os.path.join(ALIGN_DIR, "{sample}.sorted.bam")
     output:
         bam = os.path.join(ALIGN_DIR, "{sample}.mrkdup.bam"),
-        metric = os.path.join(ALIGN_DIR, "{sample}.mrkdup.metric")
+        metric = os.path.join(ALIGN_DIR, "{sample}.mrkdup.metric"),
+        condaenv = os.path.join(CONDA_ENVS_DIR, "{sample}.picard.env.txt")
     params:
         tmpdir = config['tmpdir']
     conda: "envs/picard.yaml"
@@ -134,7 +136,8 @@ rule mark_duplicates:
         "METRICS_FILE={output.metric} "
         "ASSUME_SORTED=True "
         "VALIDATION_STRINGENCY=LENIENT "
-        "TMP_DIR={params.tmpdir}"
+        "TMP_DIR={params.tmpdir} ;"
+        "conda list --export > {output.condaenv}"
 
 # samtools is available in the parent environment atac_chip_pipeline
 rule index_dupmarked_bams:
@@ -171,12 +174,14 @@ rule X0_pair_filter:
     input:
         os.path.join(PRUNE_DIR, "{sample}.ns.bam")
     output:
-        temp(os.path.join(PRUNE_DIR, "{sample}.x0_filtered.bam"))
+        filtered = temp(os.path.join(PRUNE_DIR, "{sample}.x0_filtered.bam")),
+        condaenv = os.path.join(CONDA_ENVS_DIR, "{sample}.pysam.env.txt")
     params:
         config['X0_pair_filter_params']
     conda: "envs/pysam.yaml"
     shell:
-        "python {SCRIPTS_DIR}/X0_pair_filter.py {params} -b {input} -o {output}"
+        "python {SCRIPTS_DIR}/X0_pair_filter.py {params} -b {input} -o {output.filtered} ;"
+        "conda list --export > {output.condaenv}"
 
 # samtools is available in the parent environment atac_chip_pipeline
 rule coordsort_index_final_pruned:
@@ -194,13 +199,15 @@ rule deeptools_bamcoverage_bw:
         bam = os.path.join(PRUNE_DIR, "{sample}.pruned.bam"),
         bai = os.path.join(PRUNE_DIR, "{sample}.pruned.bai")
     output:
-        os.path.join(BIGWIG_DIR, "{sample}.1m.bw")
+        bigwig = os.path.join(BIGWIG_DIR, "{sample}.1m.bw"),
+        condaenv = os.path.join(CONDA_ENVS_DIR, "{sample}.deeptools.env.txt")
     params:
         blacklist = lambda wildcards: "-bl {}".format(config['blacklist'][get_genome(wildcards.sample)]) if config.get('deeptools_bamcoverage_use_blacklist') == True else '', # deeptools_bamcoverage_use_blacklist should be True or False. If True, add `-bl /path/to/blacklist` to command. Otherwise empty string
         args = config['deeptools_bamcoverage_params']
     conda: "envs/deeptools.yaml"
     shell:
-        "bamCoverage --bam {input.bam} -o {output} {params.blacklist} {params.args}"
+        "bamCoverage --bam {input.bam} -o {output.bigwig} {params.blacklist} {params.args}; "
+        "conda list --export > {output.condaenv}"
 
 rule deeptools_bamcoverage_bg:
     input:
@@ -222,12 +229,14 @@ rule macs2_narrow_peaks:
     output:
         temp(os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.peaks.narrowPeak")),
         os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.peaks.xls"),
-        temp(os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.summits.bed"))
+        temp(os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.summits.bed")),
+        temp(os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.macs2.env.txt"))
     params:
         name = "{sample}",
         genome = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.sample)],
         outdir = os.path.join(MACS2_NARROW_DIR, "{paramset}"),
-        macs2_narrow_params = lambda wildcards: config['macs2_narrow_params'][wildcards.paramset]
+        macs2_narrow_params = lambda wildcards: config['macs2_narrow_params'][wildcards.paramset],
+        condadir = os.path.join(CONDA_ENVS_DIR)
     conda: "envs/macs2.yaml"
     run:
       if input.sample == input.input:
@@ -235,13 +244,17 @@ rule macs2_narrow_peaks:
           # aligning filename formats - separated by '.'s preferred
           shell("mv {params.outdir}/{wildcards.sample}_peaks.xls {params.outdir}/{wildcards.sample}.peaks.xls ; ")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.narrowPeak {params.outdir}/{wildcards.sample}.peaks.narrowPeak ; ")
-          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed")
+          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed ;")
+          shell("conda list --export > {wildcards.sample}.macs2.env.txt ;")
+          shell("mv {params.outdir}/{wildcards.sample}.macs2.env.txt {params.condadir}/{wildcards.sample}.macs2.env.txt ;")
       else:
           shell("macs2 callpeak -t {input.sample} -c {input.input} --outdir {params.outdir} -n {params.name} -g {params.genome} {params.macs2_narrow_params} ; ")
           # aligning filename formats - separated by '.'s preferred
           shell("mv {params.outdir}/{wildcards.sample}_peaks.xls {params.outdir}/{wildcards.sample}.peaks.xls ; ")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.narrowPeak {params.outdir}/{wildcards.sample}.peaks.narrowPeak ; ")
-          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed")
+          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed ;")
+          shell("conda list --export > {wildcards.sample}.macs2.env.txt ;")
+          shell("mv {params.outdir}/{wildcards.sample}.macs2.env.txt {params.condadir}/{wildcards.sample}.macs2.env.txt ;")
 
 rule macs2_broad_peaks:
     input:
@@ -265,7 +278,7 @@ rule macs2_broad_peaks:
           # aligning filename formats - separated by '.'s preferred
           shell("mv {params.outdir}/{wildcards.sample}_peaks.xls {params.outdir}/{wildcards.sample}.peaks.xls ; ")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.narrowPeak {params.outdir}/{wildcards.sample}.peaks.narrowPeak ; ")
-          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed")
+          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed ;")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.broadPeak {params.outdir}/{wildcards.sample}.peaks.broadPeak ; ")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.gappedPeak {params.outdir}/{wildcards.sample}.peaks.gappedPeak ; ")
       else:
@@ -273,7 +286,7 @@ rule macs2_broad_peaks:
           # aligning filename formats - separated by '.'s preferred
           shell("mv {params.outdir}/{wildcards.sample}_peaks.xls {params.outdir}/{wildcards.sample}.peaks.xls ; ")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.narrowPeak {params.outdir}/{wildcards.sample}.peaks.narrowPeak ; ")
-          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed")
+          shell("mv {params.outdir}/{wildcards.sample}_summits.bed {params.outdir}/{wildcards.sample}.summits.bed ;")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.broadPeak {params.outdir}/{wildcards.sample}.peaks.broadPeak ; ")
           shell("mv {params.outdir}/{wildcards.sample}_peaks.gappedPeak {params.outdir}/{wildcards.sample}.peaks.gappedPeak ; ")
 
@@ -283,13 +296,15 @@ rule blacklist_filter_narrow_peaks:
         summits = os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.summits.bed")
     output:
         narrowpeak = os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.BLfiltered.narrowPeak"),
-        summits = os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.summits.BLfiltered.bed")
+        summits = os.path.join(MACS2_NARROW_DIR, "{paramset}", "{sample}.summits.BLfiltered.bed"),
+        condaenv = os.path.join(CONDA_ENVS_DIR, "{sample}.bedtools.env.txt")
     params:
         blacklist = lambda wildcards: config['blacklist'][get_genome(wildcards.sample)]
     conda: "envs/bedtools.yaml"
     shell:
         "bedtools intersect -a {input.narrowpeak} -b {params.blacklist} -v > {output.narrowpeak} ; "
         "bedtools intersect -a {input.summits} -b {params.blacklist} -v > {output.summits} ; "
+        "conda list --export > {output.condaenv}"
 
 rule blacklist_filter_broad_peaks:
     input:

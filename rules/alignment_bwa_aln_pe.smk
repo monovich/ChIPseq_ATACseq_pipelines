@@ -25,11 +25,13 @@ rule bwa_sampe:
         sai_right = os.path.join(ALIGN_DIR, "{sample}_R2.sai")
     output:
         temp(os.path.join(ALIGN_DIR, "{sample}.aligned.sam"))
+        os.path.join(CONDA_ENVS_DIR, "{sample}.bwa.env.txt")
     params:
         index = lambda wildcards: config['bwa_index'][config['sample_genome'][wildcards.sample]]
     conda: "../envs/bwa.yaml"
     shell:
-        "bwa sampe {params.index} {input.sai_left} {input.sai_right} {input.fq_left} {input.fq_right} > {output}"
+        "bwa sampe {params.index} {input.sai_left} {input.sai_right} {input.fq_left} {input.fq_right} > {output} ; "
+        "conda list --export > {output.condaenv}"
 
 rule picard_sort:
     input:
