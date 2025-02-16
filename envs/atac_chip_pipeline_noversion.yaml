@@ -1,0 +1,11 @@
+name: atac_chip_pipeline
+channels:
+    - conda-forge
+    - bioconda
+dependencies:
+    - samtools
+    - snakemake-minimal
+    - pandas
+    - pytest
+    - nose
+    - homer
