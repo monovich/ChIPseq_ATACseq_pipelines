@@ -153,18 +153,6 @@ rule coordsort_index_final_pruned:
         "samtools sort -o {output.bam} {input} ;"
         "samtools index {output.bam} {output.bai}"
 
-rule igvtools_count_tdf:
-    input:
-        os.path.join(PRUNE_DIR, "{sample}.pruned.bam")
-    output:
-        os.path.join(DISP_DIR, "{sample}.tdf")
-    params:
-        genome = lambda wildcards: get_genome(wildcards.sample),
-        args = config['igvtools_count_params']
-    conda: "envs/igvtools.yaml"
-    shell:
-        "igvtools count {params.args} {input} {output} {params.genome}"
-
 rule deeptools_bamcoverage_bw:
     input:
         bam = os.path.join(PRUNE_DIR, "{sample}.pruned.bam"),
